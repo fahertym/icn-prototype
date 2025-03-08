@@ -1,0 +1,90 @@
+version: '3.8'
+
+services:
+  # Bootstrap node - first node in the network
+  bootstrap:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: icn-node:latest
+    container_name: icn-bootstrap
+    environment:
+      - NODE_TYPE=bootstrap
+      - NODE_PORT=9000
+      - BOOTSTRAP_NODES=[]
+      - COOPERATIVE_ID=icn-prototype
+      - COOPERATIVE_TIER=founder
+      - LOG_LEVEL=info
+    ports:
+      - "9000:9000"
+      - "3000:3000"
+    volumes:
+      - bootstrap-data:/app/data
+      - bootstrap-logs:/app/logs
+    restart: unless-stopped
+
+  # Regular node 1
+  node1:
+    image: icn-node:latest
+    container_name: icn-node1
+    depends_on:
+      - bootstrap
+    environment:
+      - NODE_TYPE=regular
+      - NODE_PORT=9001
+      # We'll use the container name networking in Docker Compose
+      - BOOTSTRAP_NODES=["http://bootstrap:3000"]
+      - COOPERATIVE_ID=icn-prototype
+      - COOPERATIVE_TIER=contributor
+      - LOG_LEVEL=info
+    ports:
+      - "9001:9001"
+      - "3001:3000"
+    volumes:
+      - node1-data:/app/data
+      - node1-logs:/app/logs
+    restart: unless-stopped
+
+  # Regular node 2
+  node2:
+    image: icn-node:latest
+    container_name: icn-node2
+    depends_on:
+      - bootstrap
+    environment:
+      - NODE_TYPE=regular
+      - NODE_PORT=9002
+      # We'll use the container name networking in Docker Compose
+      - BOOTSTRAP_NODES=["http://bootstrap:3000"]
+      - COOPERATIVE_ID=icn-prototype
+      - COOPERATIVE_TIER=contributor
+      - LOG_LEVEL=info
+    ports:
+      - "9002:9002"
+      - "3002:3000"
+    volumes:
+      - node2-data:/app/data
+      - node2-logs:/app/logs
+    restart: unless-stopped
+
+  # Simple web dashboard
+  dashboard:
+    image: nginx:alpine
+    container_name: icn-dashboard
+    depends_on:
+      - bootstrap
+      - node1
+      - node2
+    ports:
+      - "8080:80"
+    volumes:
+      - ./dashboard:/usr/share/nginx/html
+    restart: unless-stopped
+
+volumes:
+  bootstrap-data:
+  bootstrap-logs:
+  node1-data:
+  node1-logs:
+  node2-data:
+  node2-logs:

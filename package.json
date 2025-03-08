@@ -1,0 +1,24 @@
+{
+  "name": "icn-node",
+  "version": "0.1.0",
+  "description": "Intercooperative Network Node - Simplified HTTP Version",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [
+    "p2p",
+    "cloud",
+    "cooperative",
+    "distributed",
+    "decentralized"
+  ],
+  "author": "ICN Cooperative",
+  "license": "AGPL-3.0",
+  "dependencies": {
+    "express": "^4.18.2",
+    "node-fetch": "^2.6.9",
+    "uuid": "^9.0.0",
+    "winston": "^3.8.2"
+  }
+}
