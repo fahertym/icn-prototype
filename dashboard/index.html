@@ -4,159 +4,1583 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ICN Network Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.3/font/bootstrap-icons.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
     <style>
         body {
-            font-family: Arial, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f0f4f8;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f8f9fa;
+            padding-top: 20px;
         }
-        h1, h2 {
-            color: #1a365d;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-        .card {
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-            padding: 20px;
+        .dashboard-title {
+            color: #0d6efd;
+            font-weight: 600;
             margin-bottom: 20px;
         }
-        .node-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 20px;
+            border: none;
+        }
+        .card-header {
+            background-color: #ffffff;
+            border-bottom: 1px solid #e7e7e7;
+            font-weight: 600;
+            border-radius: 10px 10px 0 0 !important;
         }
         .node-card {
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 15px;
+            transition: transform 0.2s;
         }
-        .node-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
+        .node-card:hover {
+            transform: translateY(-5px);
         }
-        .node-type {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: bold;
+        .node-type-badge {
+            font-size: 0.8rem;
+            padding: 5px 10px;
+            border-radius: 20px;
         }
         .bootstrap {
-            background-color: #c6f6d5;
-            color: #22543d;
+            background-color: #17a2b8;
+            color: white;
         }
         .regular {
-            background-color: #bee3f8;
-            color: #2a4365;
+            background-color: #6f42c1;
+            color: white;
         }
-        .resource-bar {
-            height: 8px;
-            background-color: #edf2f7;
-            border-radius: 4px;
-            margin-top: 5px;
-            overflow: hidden;
-        }
-        .resource-fill {
-            height: 100%;
-            background-color: #4299e1;
-            border-radius: 4px;
-        }
-        .status-circle {
-            display: inline-block;
-            width: 12px;
-            height: 12px;
+        .status-indicator {
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
+            display: inline-block;
             margin-right: 5px;
         }
         .status-online {
-            background-color: #48bb78;
+            background-color: #28a745;
         }
         .status-offline {
-            background-color: #e53e3e;
+            background-color: #dc3545;
         }
-        .status-unknown {
-            background-color: #cbd5e0;
+        .progress {
+            height: 10px;
+            border-radius: 5px;
         }
-        .peers-list {
-            margin-top: 10px;
-            max-height: 150px;
-            overflow-y: auto;
-            font-size: 12px;
-        }
-        .peers-list div {
-            padding: 5px;
-            border-bottom: 1px solid #edf2f7;
-        }
-        .peers-list div:last-child {
-            border-bottom: none;
-        }
-        .refresh-btn {
-            background-color: #4299e1;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-weight: bold;
-        }
-        .refresh-btn:hover {
-            background-color: #3182ce;
-        }
-        pre {
-            background-color: #f7fafc;
+        .workload-item {
             padding: 10px;
-            border-radius: 4px;
-            overflow-x: auto;
-            font-size: 12px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            background-color: #f8f9fa;
+            border-left: 4px solid #0d6efd;
+        }
+        .workload-running {
+            border-left-color: #28a745;
+        }
+        .workload-completed {
+            border-left-color: #17a2b8;
+        }
+        .workload-failed {
+            border-left-color: #dc3545;
+        }
+        .tab-pane {
+            padding: 20px 0;
+        }
+        .chart-container {
+            position: relative;
+            height: 250px;
+            width: 100%;
+        }
+        .metric-value {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #0d6efd;
+        }
+        .metric-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+        .governance-card {
+            border-left: 4px solid #fd7e14;
+        }
+        .credit-card {
+            border-left: 4px solid #20c997;
+        }
+        .storage-card {
+            border-left: 4px solid #6610f2;
+        }
+        #networkTopology {
+            min-height: 400px;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>ICN Network Dashboard</h1>
+    <div class="container-fluid">
+        <h1 class="dashboard-title text-center">
+            <i class="bi bi-hdd-network"></i> Intercooperative Network Dashboard
+        </h1>
         
-        <div class="card">
-            <div class="node-header">
-                <h2>Network Status</h2>
-                <button id="refresh-btn" class="refresh-btn">Refresh</button>
-            </div>
-            <div id="network-stats">
-                Loading network statistics...
+        <!-- Network Overview Card -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>Network Overview</span>
+                        <button id="refresh-btn" class="btn btn-sm btn-primary">
+                            <i class="bi bi-arrow-repeat"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3 col-6 text-center mb-3">
+                                <div class="metric-value" id="total-nodes">0</div>
+                                <div class="metric-label">Total Nodes</div>
+                            </div>
+                            <div class="col-md-3 col-6 text-center mb-3">
+                                <div class="metric-value" id="active-nodes">0</div>
+                                <div class="metric-label">Active Nodes</div>
+                            </div>
+                            <div class="col-md-3 col-6 text-center mb-3">
+                                <div class="metric-value" id="active-workloads">0</div>
+                                <div class="metric-label">Active Workloads</div>
+                            </div>
+                            <div class="col-md-3 col-6 text-center mb-3">
+                                <div class="metric-value" id="storage-used">0 GB</div>
+                                <div class="metric-label">Storage Used</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
         
-        <div id="nodes-container" class="node-grid">
-            <!-- Nodes will be dynamically added here -->
+        <!-- Main Dashboard Tabs -->
+        <ul class="nav nav-tabs" id="dashboardTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="nodes-tab" data-bs-toggle="tab" data-bs-target="#nodes" type="button" role="tab" aria-controls="nodes" aria-selected="true">
+                    <i class="bi bi-hdd-rack"></i> Nodes
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="workloads-tab" data-bs-toggle="tab" data-bs-target="#workloads" type="button" role="tab" aria-controls="workloads" aria-selected="false">
+                    <i class="bi bi-cpu"></i> Workloads
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="storage-tab" data-bs-toggle="tab" data-bs-target="#storage" type="button" role="tab" aria-controls="storage" aria-selected="false">
+                    <i class="bi bi-hdd"></i> Storage
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="governance-tab" data-bs-toggle="tab" data-bs-target="#governance" type="button" role="tab" aria-controls="governance" aria-selected="false">
+                    <i class="bi bi-people"></i> Governance
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="metrics-tab" data-bs-toggle="tab" data-bs-target="#metrics" type="button" role="tab" aria-controls="metrics" aria-selected="false">
+                    <i class="bi bi-graph-up"></i> Metrics
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="topology-tab" data-bs-toggle="tab" data-bs-target="#topology" type="button" role="tab" aria-controls="topology" aria-selected="false">
+                    <i class="bi bi-diagram-3"></i> Topology
+                </button>
+            </li>
+        </ul>
+        
+        <div class="tab-content" id="dashboardTabsContent">
+            <!-- Nodes Tab -->
+            <div class="tab-pane fade show active" id="nodes" role="tabpanel" aria-labelledby="nodes-tab">
+                <div id="nodes-container" class="row">
+                    <!-- Nodes will be dynamically added here -->
+                    <div class="col-12">
+                        <div class="alert alert-info text-center">
+                            <i class="bi bi-info-circle"></i> Loading nodes...
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Workloads Tab -->
+            <div class="tab-pane fade" id="workloads" role="tabpanel" aria-labelledby="workloads-tab">
+                <div class="row mb-4">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>Active Workloads</span>
+                                <button id="submit-workload-btn" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#submitWorkloadModal">
+                                    <i class="bi bi-plus-circle"></i> Submit Workload
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div id="workloads-list">
+                                    <!-- Workloads will be dynamically added here -->
+                                    <div class="text-center text-muted">
+                                        <i class="bi bi-hourglass"></i> Loading workloads...
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">Workload Distribution</div>
+                            <div class="card-body">
+                                <canvas id="workloadDistributionChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">Workload History</div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>ID</th>
+                                                <th>Type</th>
+                                                <th>Submitted At</th>
+                                                <th>Node</th>
+                                                <th>Status</th>
+                                                <th>Duration</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="workload-history-table">
+                                            <!-- Workload history will be dynamically added here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Storage Tab -->
+            <div class="tab-pane fade" id="storage" role="tabpanel" aria-labelledby="storage-tab">
+                <div class="row mb-4">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>Files</span>
+                                <button id="upload-file-btn" class="btn btn-sm btn-success" data-bs-toggle="modal" data-bs-target="#uploadFileModal">
+                                    <i class="bi bi-upload"></i> Upload File
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-striped table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Name</th>
+                                                <th>Size</th>
+                                                <th>Type</th>
+                                                <th>Uploaded</th>
+                                                <th>Owner</th>
+                                                <th>Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="files-table">
+                                            <!-- Files will be dynamically added here -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">Storage Usage</div>
+                            <div class="card-body">
+                                <canvas id="storageUsageChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Governance Tab -->
+            <div class="tab-pane fade" id="governance" role="tabpanel" aria-labelledby="governance-tab">
+                <div class="row mb-4">
+                    <div class="col-md-8">
+                        <div class="card">
+                            <div class="card-header d-flex justify-content-between align-items-center">
+                                <span>Active Proposals</span>
+                                <button id="create-proposal-btn" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#createProposalModal">
+                                    <i class="bi bi-plus-circle"></i> Create Proposal
+                                </button>
+                            </div>
+                            <div class="card-body">
+                                <div id="proposals-list">
+                                    <!-- Proposals will be dynamically added here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-header">Credit System</div>
+                            <div class="card-body">
+                                <div class="d-flex flex-column">
+                                    <div class="mb-3">
+                                        <span class="h5">Your Balance:</span>
+                                        <span id="credit-balance" class="h3 ms-2 text-primary">0</span>
+                                        <span class="text-muted">credits</span>
+                                    </div>
+                                    <div class="mb-3">
+                                        <span class="h6">Recent Transactions:</span>
+                                        <div id="recent-transactions" class="mt-2">
+                                            <!-- Transactions will be dynamically added here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Metrics Tab -->
+            <div class="tab-pane fade" id="metrics" role="tabpanel" aria-labelledby="metrics-tab">
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">CPU Usage</div>
+                            <div class="card-body">
+                                <canvas id="cpuUsageChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">Memory Usage</div>
+                            <div class="card-body">
+                                <canvas id="memoryUsageChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">Network Traffic</div>
+                            <div class="card-body">
+                                <canvas id="networkTrafficChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card">
+                            <div class="card-header">Workload Metrics</div>
+                            <div class="card-body">
+                                <canvas id="workloadMetricsChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Topology Tab -->
+            <div class="tab-pane fade" id="topology" role="tabpanel" aria-labelledby="topology-tab">
+                <div class="row">
+                    <div class="col-12">
+                        <div class="card">
+                            <div class="card-header">Network Topology</div>
+                            <div class="card-body">
+                                <div id="networkTopology">
+                                    <!-- Network topology visualization will be rendered here -->
+                                    <div class="text-center text-muted py-5">
+                                        <i class="bi bi-diagram-3 fs-1"></i>
+                                        <p>Network topology visualization.</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
-
+    
+    <!-- Submit Workload Modal -->
+    <div class="modal fade" id="submitWorkloadModal" tabindex="-1" aria-labelledby="submitWorkloadModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="submitWorkloadModalLabel">Submit New Workload</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="workload-form">
+                        <div class="mb-3">
+                            <label for="workload-image" class="form-label">Container Image</label>
+                            <input type="text" class="form-control" id="workload-image" placeholder="e.g., alpine:latest">
+                        </div>
+                        <div class="mb-3">
+                            <label for="workload-command" class="form-label">Command</label>
+                            <input type="text" class="form-control" id="workload-command" placeholder="e.g., echo 'Hello ICN'">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Resource Requirements</label>
+                            <div class="row g-2">
+                                <div class="col-md-6">
+                                    <label for="cpu-cores" class="form-label small">CPU Cores</label>
+                                    <input type="number" class="form-control" id="cpu-cores" min="1" value="1">
+                                </div>
+                                <div class="col-md-6">
+                                    <label for="memory-required" class="form-label small">Memory</label>
+                                    <input type="text" class="form-control" id="memory-required" placeholder="e.g., 256MB" value="256MB">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="wait-for-completion">
+                            <label class="form-check-label" for="wait-for-completion">Wait for completion</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="submit-workload-form-btn">Submit Workload</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Upload File Modal -->
+    <div class="modal fade" id="uploadFileModal" tabindex="-1" aria-labelledby="uploadFileModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="uploadFileModalLabel">Upload File</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="upload-file-form">
+                        <div class="mb-3">
+                            <label for="file-input" class="form-label">Select File</label>
+                            <input type="file" class="form-control" id="file-input">
+                        </div>
+                        <div class="mb-3 form-check">
+                            <input type="checkbox" class="form-check-input" id="file-public">
+                            <label class="form-check-label" for="file-public">Make file public</label>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="upload-file-form-btn">Upload</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Create Proposal Modal -->
+    <div class="modal fade" id="createProposalModal" tabindex="-1" aria-labelledby="createProposalModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="createProposalModalLabel">Create New Proposal</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <form id="proposal-form">
+                        <div class="mb-3">
+                            <label for="proposal-title" class="form-label">Title</label>
+                            <input type="text" class="form-control" id="proposal-title" placeholder="Proposal title">
+                        </div>
+                        <div class="mb-3">
+                            <label for="proposal-description" class="form-label">Description</label>
+                            <textarea class="form-control" id="proposal-description" rows="3" placeholder="Detailed description of the proposal"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="proposal-type" class="form-label">Type</label>
+                            <select class="form-select" id="proposal-type">
+                                <option value="simple">Simple (Majority Vote)</option>
+                                <option value="parameter">Parameter Change</option>
+                                <option value="protocol">Protocol Change (2/3 Majority)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label for="proposal-options" class="form-label">Options (one per line)</label>
+                            <textarea class="form-control" id="proposal-options" rows="3" placeholder="Option 1&#10;Option 2&#10;Option 3"></textarea>
+                        </div>
+                        <div class="mb-3">
+                            <label for="proposal-duration" class="form-label">Voting Period (days)</label>
+                            <input type="number" class="form-control" id="proposal-duration" min="1" max="30" value="7">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-primary" id="create-proposal-form-btn">Create Proposal</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Node endpoints
-        const nodes = [
-            { name: 'Bootstrap Node', url: 'http://localhost:3000', type: 'bootstrap' },
-            { name: 'Node 1', url: 'http://localhost:3001', type: 'regular' },
-            { name: 'Node 2', url: 'http://localhost:3002', type: 'regular' }
-        ];
+        // Base API URL - change this if needed
+        const API_BASE_URL = '';
         
-        // Stats for the network
-        let networkStats = {
-            totalNodes: 0,
-            onlineNodes: 0,
-            totalConnections: 0,
-            totalWorkloads: 0
-        };
+        // Socket.IO connection
+        let socket;
         
-        // Format bytes to human readable
+        // Chart instances
+        let cpuChart, memoryChart, networkChart, workloadChart, storageChart, workloadDistributionChart;
+        
+        // Nodes data
+        let nodesData = {};
+        
+        // On page load
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize Socket.IO
+            initSocketConnection();
+            
+            // Initialize charts
+            initCharts();
+            
+            // Initial data fetch
+            fetchInitialData();
+            
+            // Event listeners
+            document.getElementById('refresh-btn').addEventListener('click', fetchInitialData);
+            document.getElementById('submit-workload-form-btn').addEventListener('click', submitWorkload);
+            document.getElementById('upload-file-form-btn').addEventListener('click', uploadFile);
+            document.getElementById('create-proposal-form-btn').addEventListener('click', createProposal);
+            
+            // Set up tab change listeners
+            const tabs = document.querySelectorAll('button[data-bs-toggle="tab"]');
+            tabs.forEach(tab => {
+                tab.addEventListener('shown.bs.tab', event => {
+                    const targetId = event.target.getAttribute('data-bs-target').substring(1);
+                    if (targetId === 'metrics') {
+                        updateCharts();
+                    }
+                });
+            });
+        });
+        
+        // Initialize Socket.IO connection
+        function initSocketConnection() {
+            socket = io();
+            
+            socket.on('connect', () => {
+                console.log('Socket connected:', socket.id);
+                
+                // Subscribe to real-time updates
+                socket.emit('subscribe:metrics');
+                socket.emit('subscribe:workloads');
+            });
+            
+            socket.on('metrics:update', (metrics) => {
+                updateMetricsDisplay(metrics);
+            });
+            
+            socket.on('workloads:update', (workloads) => {
+                updateWorkloadsDisplay(workloads);
+            });
+            
+            socket.on('disconnect', () => {
+                console.log('Socket disconnected');
+            });
+        }
+        
+        // Initialize charts
+        function initCharts() {
+            // CPU Usage Chart
+            const cpuCtx = document.getElementById('cpuUsageChart').getContext('2d');
+            cpuChart = new Chart(cpuCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'CPU Usage %',
+                        data: [],
+                        borderColor: 'rgba(13, 110, 253, 1)',
+                        backgroundColor: 'rgba(13, 110, 253, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Usage %'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Memory Usage Chart
+            const memoryCtx = document.getElementById('memoryUsageChart').getContext('2d');
+            memoryChart = new Chart(memoryCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Memory Usage %',
+                        data: [],
+                        borderColor: 'rgba(111, 66, 193, 1)',
+                        backgroundColor: 'rgba(111, 66, 193, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.3,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Usage %'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Network Traffic Chart
+            const networkCtx = document.getElementById('networkTrafficChart').getContext('2d');
+            networkChart = new Chart(networkCtx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'Upload (MB/s)',
+                            data: [],
+                            borderColor: 'rgba(40, 167, 69, 1)',
+                            backgroundColor: 'rgba(40, 167, 69, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true
+                        },
+                        {
+                            label: 'Download (MB/s)',
+                            data: [],
+                            borderColor: 'rgba(220, 53, 69, 1)',
+                            backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                            borderWidth: 2,
+                            tension: 0.3,
+                            fill: true
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'MB/s'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Time'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Workload Metrics Chart
+            const workloadCtx = document.getElementById('workloadMetricsChart').getContext('2d');
+            workloadChart = new Chart(workloadCtx, {
+                type: 'bar',
+                data: {
+                    labels: ['Running', 'Completed', 'Failed'],
+                    datasets: [{
+                        label: 'Workload Count',
+                        data: [0, 0, 0],
+                        backgroundColor: [
+                            'rgba(40, 167, 69, 0.7)',
+                            'rgba(23, 162, 184, 0.7)',
+                            'rgba(220, 53, 69, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(40, 167, 69, 1)',
+                            'rgba(23, 162, 184, 1)',
+                            'rgba(220, 53, 69, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Storage Usage Chart
+            const storageCtx = document.getElementById('storageUsageChart').getContext('2d');
+            storageChart = new Chart(storageCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Used', 'Available'],
+                    datasets: [{
+                        data: [0, 100],
+                        backgroundColor: [
+                            'rgba(102, 16, 242, 0.7)',
+                            'rgba(233, 236, 239, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(102, 16, 242, 1)',
+                            'rgba(233, 236, 239, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+            
+            // Workload Distribution Chart
+            const workloadDistCtx = document.getElementById('workloadDistributionChart').getContext('2d');
+            workloadDistributionChart = new Chart(workloadDistCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Node 1', 'Node 2', 'Node 3'],
+                    datasets: [{
+                        data: [0, 0, 0],
+                        backgroundColor: [
+                            'rgba(13, 110, 253, 0.7)',
+                            'rgba(111, 66, 193, 0.7)',
+                            'rgba(23, 162, 184, 0.7)'
+                        ],
+                        borderColor: [
+                            'rgba(13, 110, 253, 1)',
+                            'rgba(111, 66, 193, 1)',
+                            'rgba(23, 162, 184, 1)'
+                        ],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // Fetch initial data
+        async function fetchInitialData() {
+            try {
+                // Fetch nodes
+                const nodesResponse = await fetch(`${API_BASE_URL}/api/peers`);
+                if (nodesResponse.ok) {
+                    const nodes = await nodesResponse.json();
+                    updateNodesDisplay(nodes);
+                }
+                
+                // Fetch workloads
+                const workloadsResponse = await fetch(`${API_BASE_URL}/api/workloads`);
+                if (workloadsResponse.ok) {
+                    const workloads = await workloadsResponse.json();
+                    updateWorkloadsDisplay(workloads);
+                }
+                
+                // Fetch metrics
+                const metricsResponse = await fetch(`${API_BASE_URL}/api/metrics`);
+                if (metricsResponse.ok) {
+                    const metrics = await metricsResponse.json();
+                    updateMetricsDisplay(metrics);
+                }
+                
+                // Fetch storage files
+                const filesResponse = await fetch(`${API_BASE_URL}/api/storage/files`);
+                if (filesResponse.ok) {
+                    const files = await filesResponse.json();
+                    updateFilesDisplay(files);
+                }
+                
+                // Fetch credit balance
+                const creditResponse = await fetch(`${API_BASE_URL}/api/credits/balance`);
+                if (creditResponse.ok) {
+                    const credit = await creditResponse.json();
+                    document.getElementById('credit-balance').textContent = credit.balance;
+                }
+                
+                // Fetch proposals
+                const proposalsResponse = await fetch(`${API_BASE_URL}/api/governance/proposals`);
+                if (proposalsResponse.ok) {
+                    const proposals = await proposalsResponse.json();
+                    updateProposalsDisplay(proposals.proposals);
+                }
+                
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+        
+        // Update nodes display
+        function updateNodesDisplay(nodes) {
+            const nodesContainer = document.getElementById('nodes-container');
+            nodesContainer.innerHTML = '';
+            
+            // Update network stats
+            document.getElementById('total-nodes').textContent = nodes.length + 1; // +1 for current node
+            document.getElementById('active-nodes').textContent = nodes.length + 1;
+            
+            // Add current node first
+            fetch(`${API_BASE_URL}/api/status`)
+                .then(response => response.json())
+                .then(currentNode => {
+                    // Store in nodesData
+                    nodesData[currentNode.id] = currentNode;
+                    
+                    // Create node card
+                    const nodeCard = createNodeCard(currentNode, true);
+                    nodesContainer.appendChild(nodeCard);
+                    
+                    // Add other nodes
+                    nodes.forEach(node => {
+                        // Store in nodesData
+                        nodesData[node.id] = node;
+                        
+                        // Create node card
+                        const nodeCard = createNodeCard(node);
+                        nodesContainer.appendChild(nodeCard);
+                    });
+                })
+                .catch(error => {
+                    console.error('Error fetching current node status:', error);
+                });
+        }
+        
+        // Create a node card element
+        function createNodeCard(node, isCurrent = false) {
+            const col = document.createElement('div');
+            col.className = 'col-md-4 col-sm-6 mb-4';
+            
+            // Parse memory if available
+            let memoryUsage = 0;
+            let memoryTotal = 'N/A';
+            let cpuCores = 'N/A';
+            
+            if (node.resources) {
+                if (node.resources.memory) {
+                    const availableMatch = node.resources.memory.available?.match(/(\d+)MB/);
+                    const totalMatch = node.resources.memory.total?.match(/(\d+)MB/);
+                    
+                    if (availableMatch && totalMatch) {
+                        const available = parseInt(availableMatch[1]);
+                        const total = parseInt(totalMatch[1]);
+                        memoryUsage = 100 - (available / total * 100);
+                        memoryTotal = `${total} MB`;
+                    }
+                }
+                
+                if (node.resources.cpu) {
+                    cpuCores = node.resources.cpu.cores || 'N/A';
+                }
+            }
+            
+            col.innerHTML = `
+                <div class="card node-card h-100 ${isCurrent ? 'border-primary' : ''}">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <div>
+                            <span class="status-indicator status-online"></span>
+                            <span class="fw-bold">${isCurrent ? 'This Node' : 'Node'}</span>
+                        </div>
+                        <span class="node-type-badge ${node.nodeType}">${node.nodeType}</span>
+                    </div>
+                    <div class="card-body">
+                        <p class="card-text small text-muted mb-3">ID: ${node.id.substring(0, 8)}...</p>
+                        <div class="mb-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>CPU:</span>
+                                <span>${cpuCores} cores</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Memory:</span>
+                                <span>${memoryTotal}</span>
+                            </div>
+                            <div class="mb-1">
+                                <div class="d-flex justify-content-between mb-1">
+                                    <span>Memory Usage:</span>
+                                    <span>${memoryUsage.toFixed(1)}%</span>
+                                </div>
+                                <div class="progress">
+                                    <div class="progress-bar bg-${memoryUsage > 80 ? 'danger' : memoryUsage > 60 ? 'warning' : 'success'}" 
+                                         role="progressbar" 
+                                         style="width: ${memoryUsage}%" 
+                                         aria-valuenow="${memoryUsage}" 
+                                         aria-valuemin="0" 
+                                         aria-valuemax="100"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="mt-3">
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Uptime:</span>
+                                <span>${formatUptime(node.uptime)}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Connections:</span>
+                                <span>${node.connections || 0}</span>
+                            </div>
+                            <div class="d-flex justify-content-between mb-1">
+                                <span>Workloads:</span>
+                                <span>${node.workloads?.activeCount || 0} active</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer text-end">
+                        <button class="btn btn-sm btn-outline-primary view-node-btn" data-node-id="${node.id}">
+                            <i class="bi bi-info-circle"></i> Details
+                        </button>
+                    </div>
+                </div>
+            `;
+            
+            return col;
+        }
+        
+        // Update workloads display
+        function updateWorkloadsDisplay(workloads) {
+            const workloadsList = document.getElementById('workloads-list');
+            
+            // Update network stats
+            document.getElementById('active-workloads').textContent = workloads.length;
+            
+            if (workloads.length === 0) {
+                workloadsList.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-hourglass"></i> No active workloads
+                    </div>
+                `;
+                return;
+            }
+            
+            workloadsList.innerHTML = '';
+            
+            // Count workload states for chart
+            const workloadStates = {
+                running: 0,
+                completed: 0,
+                failed: 0
+            };
+            
+            // Count workloads per node for distribution chart
+            const workloadDistribution = {};
+            
+            workloads.forEach(workload => {
+                // Update counts
+                if (workload.status === 'running') workloadStates.running++;
+                else if (workload.status === 'exited' && workload.exitCode === 0) workloadStates.completed++;
+                else workloadStates.failed++;
+                
+                // Update distribution
+                if (!workloadDistribution[workload.providerId]) {
+                    workloadDistribution[workload.providerId] = 0;
+                }
+                workloadDistribution[workload.providerId]++;
+                
+                const statusClass = workload.status === 'running' ? 'workload-running' : 
+                                   (workload.status === 'exited' && workload.exitCode === 0) ? 'workload-completed' : 
+                                   'workload-failed';
+                
+                const statusText = workload.status === 'running' ? 'Running' :
+                                  (workload.status === 'exited' && workload.exitCode === 0) ? 'Completed' :
+                                  'Failed';
+                
+                const workloadItem = document.createElement('div');
+                workloadItem.className = `workload-item ${statusClass}`;
+                workloadItem.innerHTML = `
+                    <div class="d-flex justify-content-between align-items-start">
+                        <div>
+                            <h6 class="mb-1">Workload ${workload.id.substring(0, 8)}...</h6>
+                            <div class="small text-muted">Submitted: ${new Date(workload.createdAt).toLocaleString()}</div>
+                        </div>
+                        <span class="badge bg-${statusClass === 'workload-running' ? 'success' : 
+                                               statusClass === 'workload-completed' ? 'info' : 'danger'}">
+                            ${statusText}
+                        </span>
+                    </div>
+                    <div class="d-flex justify-content-between mt-2">
+                        <span class="small text-muted">Node: ${workload.providerId.substring(0, 8)}...</span>
+                        <div>
+                            <button class="btn btn-sm btn-outline-secondary view-logs-btn" data-workload-id="${workload.id}">
+                                <i class="bi bi-file-text"></i> Logs
+                            </button>
+                            ${workload.status === 'running' ? `
+                                <button class="btn btn-sm btn-outline-danger stop-workload-btn" data-workload-id="${workload.id}">
+                                    <i class="bi bi-stop-circle"></i> Stop
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+                
+                workloadsList.appendChild(workloadItem);
+                
+                // Add event listeners
+                const logsBtn = workloadItem.querySelector('.view-logs-btn');
+                logsBtn.addEventListener('click', () => viewWorkloadLogs(workload.id));
+                
+                const stopBtn = workloadItem.querySelector('.stop-workload-btn');
+                if (stopBtn) {
+                    stopBtn.addEventListener('click', () => stopWorkload(workload.id));
+                }
+            });
+            
+            // Update workload metrics chart
+            workloadChart.data.datasets[0].data = [
+                workloadStates.running,
+                workloadStates.completed,
+                workloadStates.failed
+            ];
+            workloadChart.update();
+            
+            // Update workload distribution chart
+            const nodeLabels = [];
+            const nodeData = [];
+            
+            Object.entries(workloadDistribution).forEach(([nodeId, count]) => {
+                // Use node name if available, otherwise use ID
+                let nodeName = nodeId.substring(0, 8) + '...';
+                if (nodesData[nodeId]) {
+                    nodeName = nodesData[nodeId].nodeType === 'bootstrap' ? 'Bootstrap Node' : 'Node ' + nodeId.substring(0, 8);
+                }
+                
+                nodeLabels.push(nodeName);
+                nodeData.push(count);
+            });
+            
+            workloadDistributionChart.data.labels = nodeLabels;
+            workloadDistributionChart.data.datasets[0].data = nodeData;
+            workloadDistributionChart.update();
+        }
+        
+        // Update metrics display
+        function updateMetricsDisplay(metrics) {
+            // Check if metrics history exists
+            if (metrics.history && metrics.history.length > 0) {
+                // Create labels array (timestamps)
+                const labels = metrics.history.map(entry => {
+                    const date = new Date(entry.timestamp);
+                    return date.toLocaleTimeString();
+                }).reverse();
+                
+                // Update CPU chart
+                cpuChart.data.labels = labels;
+                cpuChart.data.datasets[0].data = metrics.history.map(entry => entry.cpu).reverse();
+                cpuChart.update();
+                
+                // Update memory chart
+                memoryChart.data.labels = labels;
+                memoryChart.data.datasets[0].data = metrics.history.map(entry => entry.memory).reverse();
+                memoryChart.update();
+                
+                // Update network chart
+                networkChart.data.labels = labels;
+                networkChart.data.datasets[0].data = metrics.history.map(entry => entry.network.tx / (1024 * 1024)).reverse(); // Convert to MB/s
+                networkChart.data.datasets[1].data = metrics.history.map(entry => entry.network.rx / (1024 * 1024)).reverse(); // Convert to MB/s
+                networkChart.update();
+            }
+            
+            // Update storage chart if available
+            if (metrics.storage && metrics.storage.data) {
+                const totalStorage = metrics.storage.data.total;
+                const usedStorage = totalStorage - metrics.storage.data.available;
+                const usedPercentage = (usedStorage / totalStorage) * 100;
+                
+                storageChart.data.datasets[0].data = [usedPercentage, 100 - usedPercentage];
+                storageChart.update();
+                
+                // Update storage used in overview
+                const storageTotalGB = totalStorage / (1024 * 1024 * 1024);
+                const storageUsedGB = usedStorage / (1024 * 1024 * 1024);
+                document.getElementById('storage-used').textContent = `${storageUsedGB.toFixed(2)} / ${storageTotalGB.toFixed(2)} GB`;
+            }
+        }
+        
+        // Update files display
+        function updateFilesDisplay(files) {
+            const filesTable = document.getElementById('files-table');
+            
+            if (files.length === 0) {
+                filesTable.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="bi bi-file-earmark"></i> No files stored
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+            
+            filesTable.innerHTML = '';
+            
+            files.forEach(file => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${file.originalName}</td>
+                    <td>${formatBytes(file.size)}</td>
+                    <td>${file.mimeType}</td>
+                    <td>${new Date(file.createdAt).toLocaleString()}</td>
+                    <td>${file.ownerId.substring(0, 8)}...</td>
+                    <td>
+                        <a href="${API_BASE_URL}/api/storage/files/${file.id}" class="btn btn-sm btn-outline-primary" download>
+                            <i class="bi bi-download"></i>
+                        </a>
+                        <button class="btn btn-sm btn-outline-danger delete-file-btn" data-file-id="${file.id}">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </td>
+                `;
+                
+                filesTable.appendChild(tr);
+                
+                // Add event listener
+                const deleteBtn = tr.querySelector('.delete-file-btn');
+                deleteBtn.addEventListener('click', () => deleteFile(file.id));
+            });
+        }
+        
+        // Update proposals display
+        function updateProposalsDisplay(proposals) {
+            const proposalsList = document.getElementById('proposals-list');
+            
+            if (!proposals || proposals.length === 0) {
+                proposalsList.innerHTML = `
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-clipboard-check"></i> No active proposals
+                    </div>
+                `;
+                return;
+            }
+            
+            proposalsList.innerHTML = '';
+            
+            proposals.forEach(proposal => {
+                const proposalItem = document.createElement('div');
+                proposalItem.className = 'card mb-3 governance-card';
+                
+                // Calculate time remaining
+                const timeRemaining = proposal.endsAt - Date.now();
+                const daysRemaining = Math.max(0, Math.floor(timeRemaining / (1000 * 60 * 60 * 24)));
+                const hoursRemaining = Math.max(0, Math.floor((timeRemaining % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60)));
+                
+                // Count votes
+                const totalVotes = Object.keys(proposal.votes).length;
+                
+                proposalItem.innerHTML = `
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <span>${proposal.title}</span>
+                        <span class="badge bg-${proposal.status === 'active' ? 'success' : 'secondary'}">
+                            ${proposal.status}
+                        </span>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted small mb-3">Proposed by: ${proposal.authorId.substring(0, 8)}... • 
+                           ${new Date(proposal.createdAt).toLocaleDateString()}</p>
+                        <p>${proposal.description}</p>
+                        
+                        <div class="row mt-3">
+                            <div class="col-md-6">
+                                <h6>Options:</h6>
+                                <ul>
+                                    ${proposal.options.map(option => `<li>${option}</li>`).join('')}
+                                </ul>
+                            </div>
+                            <div class="col-md-6">
+                                <h6>Voting Status:</h6>
+                                <p class="text-muted mb-2">${totalVotes} votes cast</p>
+                                ${proposal.status === 'active' ? `
+                                    <p class="text-muted">Time remaining: ${daysRemaining}d ${hoursRemaining}h</p>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card-footer text-end">
+                        ${proposal.status === 'active' ? `
+                            <button class="btn btn-sm btn-primary vote-btn" data-proposal-id="${proposal.id}" data-bs-toggle="modal" data-bs-target="#voteModal">
+                                <i class="bi bi-check2-square"></i> Vote
+                            </button>
+                        ` : ''}
+                        <button class="btn btn-sm btn-outline-secondary details-btn" data-proposal-id="${proposal.id}">
+                            <i class="bi bi-info-circle"></i> Details
+                        </button>
+                    </div>
+                `;
+                
+                proposalsList.appendChild(proposalItem);
+            });
+        }
+        
+        // Submit a new workload
+        async function submitWorkload() {
+            const image = document.getElementById('workload-image').value;
+            const command = document.getElementById('workload-command').value;
+            const cpuCores = parseInt(document.getElementById('cpu-cores').value);
+            const memoryRequired = document.getElementById('memory-required').value;
+            const waitForCompletion = document.getElementById('wait-for-completion').checked;
+            
+            if (!image && !command) {
+                alert('Please provide either an image or a command');
+                return;
+            }
+            
+            const workloadData = {
+                image: image || 'alpine:latest',
+                command: command ? command.split(' ') : ['echo', 'Hello ICN'],
+                requirements: {
+                    cpu: { cores: cpuCores },
+                    memory: { required: memoryRequired }
+                },
+                waitForCompletion
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/workloads`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(workloadData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`Workload submitted successfully. ID: ${result.workloadId}`);
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('submitWorkloadModal'));
+                    modal.hide();
+                    
+                    // Clear form
+                    document.getElementById('workload-form').reset();
+                    
+                    // Refresh workloads
+                    const workloadsResponse = await fetch(`${API_BASE_URL}/api/workloads`);
+                    if (workloadsResponse.ok) {
+                        const workloads = await workloadsResponse.json();
+                        updateWorkloadsDisplay(workloads);
+                    }
+                } else {
+                    alert(`Failed to submit workload: ${result.reason || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Error submitting workload:', error);
+                alert('Failed to submit workload: Network error');
+            }
+        }
+        
+        // Upload a file
+        async function uploadFile() {
+            const fileInput = document.getElementById('file-input');
+            const isPublic = document.getElementById('file-public').checked;
+            
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert('Please select a file to upload');
+                return;
+            }
+            
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('metadata', JSON.stringify({
+                isPublic
+            }));
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/storage/files`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`File uploaded successfully. ID: ${result.fileId}`);
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('uploadFileModal'));
+                    modal.hide();
+                    
+                    // Clear form
+                    document.getElementById('upload-file-form').reset();
+                    
+                    // Refresh files
+                    const filesResponse = await fetch(`${API_BASE_URL}/api/storage/files`);
+                    if (filesResponse.ok) {
+                        const files = await filesResponse.json();
+                        updateFilesDisplay(files);
+                    }
+                } else {
+                    alert(`Failed to upload file: ${result.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Error uploading file:', error);
+                alert('Failed to upload file: Network error');
+            }
+        }
+        
+        // Create a proposal
+        async function createProposal() {
+            const title = document.getElementById('proposal-title').value;
+            const description = document.getElementById('proposal-description').value;
+            const type = document.getElementById('proposal-type').value;
+            const optionsText = document.getElementById('proposal-options').value;
+            const duration = parseInt(document.getElementById('proposal-duration').value);
+            
+            if (!title || !description || !optionsText) {
+                alert('Please fill in all required fields');
+                return;
+            }
+            
+            // Parse options
+            const options = optionsText.split('\n')
+                .map(line => line.trim())
+                .filter(line => line.length > 0);
+            
+            if (options.length < 2) {
+                alert('Please provide at least two options');
+                return;
+            }
+            
+            const proposalData = {
+                title,
+                description,
+                type,
+                options,
+                votingPeriod: duration * 24 * 60 * 60 * 1000 // Convert days to milliseconds
+            };
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/governance/proposals`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(proposalData)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    alert(`Proposal created successfully. ID: ${result.id}`);
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('createProposalModal'));
+                    modal.hide();
+                    
+                    // Clear form
+                    document.getElementById('proposal-form').reset();
+                    
+                    // Refresh proposals
+                    const proposalsResponse = await fetch(`${API_BASE_URL}/api/governance/proposals`);
+                    if (proposalsResponse.ok) {
+                        const proposals = await proposalsResponse.json();
+                        updateProposalsDisplay(proposals.proposals);
+                    }
+                } else {
+                    alert(`Failed to create proposal: ${result.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Error creating proposal:', error);
+                alert('Failed to create proposal: Network error');
+            }
+        }
+        
+        // View workload logs
+        async function viewWorkloadLogs(workloadId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/workloads/${workloadId}/logs`);
+                
+                if (response.ok) {
+                    const logs = await response.text();
+                    
+                    // Create a modal to display logs
+                    const modal = document.createElement('div');
+                    modal.className = 'modal fade';
+                    modal.id = 'logsModal';
+                    modal.setAttribute('tabindex', '-1');
+                    modal.setAttribute('aria-labelledby', 'logsModalLabel');
+                    modal.setAttribute('aria-hidden', 'true');
+                    
+                    modal.innerHTML = `
+                        <div class="modal-dialog modal-lg">
+                            <div class="modal-content">
+                                <div class="modal-header">
+                                    <h5 class="modal-title" id="logsModalLabel">Logs for Workload ${workloadId.substring(0, 8)}...</h5>
+                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                </div>
+                                <div class="modal-body">
+                                    <pre class="bg-dark text-light p-3" style="max-height: 400px; overflow-y: auto;">${logs || 'No logs available'}</pre>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    
+                    document.body.appendChild(modal);
+                    
+                    // Show the modal
+                    const logsModal = new bootstrap.Modal(modal);
+                    logsModal.show();
+                    
+                    // Clean up when the modal is hidden
+                    modal.addEventListener('hidden.bs.modal', () => {
+                        document.body.removeChild(modal);
+                    });
+                } else {
+                    alert('Failed to fetch workload logs');
+                }
+            } catch (error) {
+                console.error('Error fetching workload logs:', error);
+                alert('Failed to fetch workload logs: Network error');
+            }
+        }
+        
+        // Stop a workload
+        async function stopWorkload(workloadId) {
+            if (!confirm(`Are you sure you want to stop workload ${workloadId.substring(0, 8)}...?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/workloads/${workloadId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    alert('Workload stopped successfully');
+                    
+                    // Refresh workloads
+                    const workloadsResponse = await fetch(`${API_BASE_URL}/api/workloads`);
+                    if (workloadsResponse.ok) {
+                        const workloads = await workloadsResponse.json();
+                        updateWorkloadsDisplay(workloads);
+                    }
+                } else {
+                    const errorData = await response.json();
+                    alert(`Failed to stop workload: ${errorData.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Error stopping workload:', error);
+                alert('Failed to stop workload: Network error');
+            }
+        }
+        
+        // Delete a file
+        async function deleteFile(fileId) {
+            if (!confirm(`Are you sure you want to delete this file?`)) {
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/storage/files/${fileId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    alert('File deleted successfully');
+                    
+                    // Refresh files
+                    const filesResponse = await fetch(`${API_BASE_URL}/api/storage/files`);
+                    if (filesResponse.ok) {
+                        const files = await filesResponse.json();
+                        updateFilesDisplay(files);
+                    }
+                } else {
+                    const errorData = await response.json();
+                    alert(`Failed to delete file: ${errorData.error || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Error deleting file:', error);
+                alert('Failed to delete file: Network error');
+            }
+        }
+        
+        // Update charts with latest data
+        function updateCharts() {
+            // This is called when switching to the metrics tab
+            fetch(`${API_BASE_URL}/api/metrics/history`)
+                .then(response => response.json())
+                .then(data => {
+                    updateMetricsDisplay(data);
+                })
+                .catch(error => {
+                    console.error('Error fetching metrics history:', error);
+                });
+        }
+        
+        // Format uptime to human-readable format
+        function formatUptime(seconds) {
+            if (!seconds && seconds !== 0) return 'N/A';
+            
+            const days = Math.floor(seconds / (24 * 60 * 60));
+            const hours = Math.floor((seconds % (24 * 60 * 60)) / (60 * 60));
+            const minutes = Math.floor((seconds % (60 * 60)) / 60);
+            
+            if (days > 0) {
+                return `${days}d ${hours}h`;
+            } else if (hours > 0) {
+                return `${hours}h ${minutes}m`;
+            } else {
+                return `${minutes}m`;
+            }
+        }
+        
+        // Format bytes to human-readable format
         function formatBytes(bytes, decimals = 2) {
-            if (!bytes) return '0 Bytes';
+            if (bytes === 0) return '0 Bytes';
             
             const k = 1024;
             const dm = decimals < 0 ? 0 : decimals;
@@ -166,203 +1590,6 @@
             
             return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
         }
-        
-        // Parse memory string to bytes
-        function parseMemory(memString) {
-            const units = {
-                'B': 1,
-                'KB': 1024,
-                'MB': 1024 * 1024,
-                'GB': 1024 * 1024 * 1024,
-                'TB': 1024 * 1024 * 1024 * 1024
-            };
-            
-            const match = memString.match(/^(\d+(?:\.\d+)?)\s*([KMGT]B)$/i);
-            if (!match) return 0;
-            
-            const value = parseFloat(match[1]);
-            const unit = match[2].toUpperCase();
-            
-            return value * (units[unit] || 0);
-        }
-        
-        // Fetch data from a node
-        async function fetchNodeData(node) {
-            try {
-                const statusResponse = await fetch(`${node.url}/api/status`);
-                const status = await statusResponse.json();
-                
-                const peersResponse = await fetch(`${node.url}/api/peers`);
-                const peers = await peersResponse.json();
-                
-                const workloadsResponse = await fetch(`${node.url}/api/workloads`);
-                const workloads = await workloadsResponse.json();
-                
-                return { 
-                    status, 
-                    peers, 
-                    workloads,
-                    online: true
-                };
-            } catch (err) {
-                console.error(`Error fetching data from ${node.name}:`, err);
-                return { 
-                    status: null, 
-                    peers: [], 
-                    workloads: [],
-                    online: false
-                };
-            }
-        }
-        
-        // Render node card
-        function renderNodeCard(node, data) {
-            const nodeCard = document.createElement('div');
-            nodeCard.className = 'node-card';
-            
-            let cpuUsage = 0;
-            let memoryUsage = 0;
-            
-            if (data.online && data.status) {
-                // Update network stats
-                networkStats.onlineNodes++;
-                networkStats.totalConnections += data.status.connections || 0;
-                networkStats.totalWorkloads += data.workloads.length || 0;
-                
-                // Calculate resource usage
-                if (data.status.resources) {
-                    const workloadCores = data.workloads.reduce((total, wl) => 
-                        total + ((wl.requirements?.cpu?.cores) || 1), 0);
-                    
-                    cpuUsage = (workloadCores / data.status.resources.cpu.cores) * 100;
-                    
-                    // For memory, parse the strings to get actual values
-                    const totalMemory = parseMemory(data.status.resources.memory.total);
-                    const availableMemory = parseMemory(data.status.resources.memory.available);
-                    
-                    if (totalMemory > 0) {
-                        memoryUsage = ((totalMemory - availableMemory) / totalMemory) * 100;
-                    }
-                }
-            }
-            
-            nodeCard.innerHTML = `
-                <div class="node-header">
-                    <div>
-                        <span class="status-circle ${data.online ? 'status-online' : 'status-offline'}"></span>
-                        <strong>${node.name}</strong>
-                    </div>
-                    <span class="node-type ${node.type}">${node.type}</span>
-                </div>
-                
-                ${data.online && data.status ? `
-                    <div>
-                        <small>ID: ${data.status.id}</small>
-                    </div>
-                    <div>
-                        <small>Uptime: ${Math.floor(data.status.uptime / 60)} minutes</small>
-                    </div>
-                    <div>
-                        <small>Connections: ${data.status.connections}</small>
-                    </div>
-                    <div>
-                        <small>Workloads: ${data.workloads.length}</small>
-                    </div>
-                    
-                    <div style="margin-top: 15px;">
-                        <small>CPU Usage: ${cpuUsage.toFixed(1)}%</small>
-                        <div class="resource-bar">
-                            <div class="resource-fill" style="width: ${cpuUsage}%"></div>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-top: 10px;">
-                        <small>Memory Usage: ${memoryUsage.toFixed(1)}%</small>
-                        <div class="resource-bar">
-                            <div class="resource-fill" style="width: ${memoryUsage}%"></div>
-                        </div>
-                    </div>
-                    
-                    <div style="margin-top: 15px;">
-                        <small><strong>Connected Peers:</strong></small>
-                        <div class="peers-list">
-                            ${data.peers.length > 0 
-                                ? data.peers.map(peer => `<div>${peer.id.substr(0, 20)}...</div>`).join('') 
-                                : '<div>No connected peers</div>'
-                            }
-                        </div>
-                    </div>
-                ` : `
-                    <div style="margin-top: 15px; color: #e53e3e;">
-                        <strong>Node is offline or unreachable</strong>
-                    </div>
-                `}
-            `;
-            
-            return nodeCard;
-        }
-        
-        // Render network stats
-        function renderNetworkStats() {
-            const statsContainer = document.getElementById('network-stats');
-            
-            statsContainer.innerHTML = `
-                <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 10px;">
-                    <div>
-                        <div><strong>Total Nodes</strong></div>
-                        <div style="font-size: 24px;">${networkStats.totalNodes}</div>
-                    </div>
-                    <div>
-                        <div><strong>Online Nodes</strong></div>
-                        <div style="font-size: 24px;">${networkStats.onlineNodes}</div>
-                    </div>
-                    <div>
-                        <div><strong>Total Connections</strong></div>
-                        <div style="font-size: 24px;">${networkStats.totalConnections}</div>
-                    </div>
-                    <div>
-                        <div><strong>Workloads</strong></div>
-                        <div style="font-size: 24px;">${networkStats.totalWorkloads}</div>
-                    </div>
-                </div>
-            `;
-        }
-        
-        // Refresh all data
-        async function refreshData() {
-            const nodesContainer = document.getElementById('nodes-container');
-            nodesContainer.innerHTML = '';
-            
-            // Reset network stats
-            networkStats = {
-                totalNodes: nodes.length,
-                onlineNodes: 0,
-                totalConnections: 0,
-                totalWorkloads: 0
-            };
-            
-            // Fetch data for all nodes
-            const promises = nodes.map(node => fetchNodeData(node));
-            const results = await Promise.all(promises);
-            
-            // Render node cards
-            nodes.forEach((node, index) => {
-                const nodeCard = renderNodeCard(node, results[index]);
-                nodesContainer.appendChild(nodeCard);
-            });
-            
-            // Render network stats
-            renderNetworkStats();
-        }
-        
-        // Initial load
-        document.addEventListener('DOMContentLoaded', refreshData);
-        
-        // Refresh button
-        document.getElementById('refresh-btn').addEventListener('click', refreshData);
-        
-        // Auto-refresh every 30 seconds
-        setInterval(refreshData, 30000);
     </script>
 </body>
 </html>

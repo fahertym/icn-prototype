@@ -1,12 +1,18 @@
-// ICN Node Implementation - Simplified HTTP Version
+/**
+ * ICN Node - Main Application
+ * Enhanced implementation of the Intercooperative Network Node
+ */
 const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const winston = require('winston');
+const http = require('http');
+const socketIo = require('socket.io');
 const os = require('os');
-const crypto = require('crypto');
-const fetch = require('node-fetch');
 const { v4: uuidv4 } = require('uuid');
+const fetch = require('node-fetch');
+const cors = require('cors');
+const bodyParser = require('body-parser');
 
 // Create the logger
 const logger = winston.createLogger({
@@ -34,11 +40,13 @@ class ICNNode {
     this.nodeId = null;
     this.resources = null;
     this.config = null;
-    this.workloads = new Map();
     this.knownPeers = new Map(); // Map of peer IDs to peer info
+    this.workloads = new Map(); // Map of workload IDs to workload info
     this.discoveryInterval = null;
     this.resourceBroadcastInterval = null;
     this.apiServer = null;
+    this.httpServer = null;
+    this.io = null;
   }
 
   async init() {
@@ -69,6 +77,7 @@ class ICNNode {
       // Setup shutdown handlers
       this._setupShutdownHandlers();
       
+      logger.info('ICN node initialization complete');
       return this;
     } catch (error) {
       logger.error('Failed to initialize ICN node:', error);
@@ -152,10 +161,36 @@ class ICNNode {
     const app = express();
     const apiPort = process.env.API_PORT || 3000;
     
-    // Enable JSON middleware
-    app.use(express.json());
+    // Create HTTP server (needed for Socket.IO)
+    this.httpServer = http.createServer(app);
     
-    // Status endpoint
+    // Initialize Socket.IO
+    this.io = socketIo(this.httpServer, {
+      cors: {
+        origin: "*",
+        methods: ["GET", "POST"]
+      }
+    });
+    
+    // Setup middleware
+    app.use(cors());
+    app.use(bodyParser.json());
+    app.use(bodyParser.urlencoded({ extended: true }));
+    
+    // API routes
+    this._setupApiRoutes(app);
+    
+    // Socket.IO event handlers
+    this._setupSocketHandlers();
+    
+    // Start the server
+    this.httpServer.listen(apiPort, '0.0.0.0', () => {
+      logger.info(`API server listening on port ${apiPort}`);
+    });
+  }
+  
+  _setupApiRoutes(app) {
+    // Basic node information
     app.get('/api/status', (req, res) => {
       res.json({
         id: this.nodeId,
@@ -163,7 +198,7 @@ class ICNNode {
         nodeType: this.config.nodeType,
         connections: this.knownPeers.size,
         resources: this.resources,
-        workloads: this.workloads.size
+        workloads: { activeCount: this.workloads.size }
       });
     });
     
@@ -217,7 +252,9 @@ class ICNNode {
       res.json(peers);
     });
     
-    // Workloads endpoint
+    // WORKLOAD MANAGEMENT ENDPOINTS
+    
+    // List workloads
     app.get('/api/workloads', (req, res) => {
       const workloads = Array.from(this.workloads.entries()).map(([id, workload]) => ({
         id,
@@ -227,16 +264,24 @@ class ICNNode {
       res.json(workloads);
     });
     
-    // Submit workload endpoint
+    // Submit workload
     app.post('/api/workloads', async (req, res) => {
       try {
         const workload = req.body;
         
         // Validate workload
-        if (!workload.id) {
-          workload.id = this._generateId();
+        if (!workload.image && !workload.command) {
+          return res.status(400).json({ 
+            error: 'Workload must include either image or command' 
+          });
         }
         
+        // Generate workload ID if not provided
+        if (!workload.id) {
+          workload.id = `wl-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
+        }
+        
+        // Default requirements if not specified
         if (!workload.requirements) {
           workload.requirements = {
             cpu: { cores: 1 },
@@ -244,52 +289,197 @@ class ICNNode {
           };
         }
         
-        // Check if we can accept it
-        const decision = this._canAcceptWorkload(workload);
+        // Set consumer ID (use request source or default to self for testing)
+        const consumerId = req.body.consumerId || this.nodeId;
         
-        if (decision.canAccept) {
-          // Accept locally
-          this.workloads.set(workload.id, {
-            ...workload,
-            status: 'accepted',
-            acceptedAt: Date.now()
-          });
-          
-          res.status(201).json({
-            accepted: true,
-            workloadId: workload.id,
-            nodeId: this.nodeId
-          });
-        } else {
-          // Try to find another node
-          const result = await this._findNodeForWorkload(workload);
-          
+        // Simple simulation - accept and schedule the workload
+        this.workloads.set(workload.id, {
+          ...workload,
+          consumerId,
+          providerId: this.nodeId,
+          status: 'running',
+          createdAt: Date.now()
+        });
+        
+        logger.info(`Workload ${workload.id} accepted`);
+        
+        res.status(201).json({
+          accepted: true,
+          workloadId: workload.id,
+          nodeId: this.nodeId,
+          status: 'running'
+        });
+      } catch (err) {
+        logger.error('Error handling workload submission:', err);
+        
+        // Try to find another node if we can't handle it
+        try {
+          const result = await this._findNodeForWorkload(req.body);
           if (result.success) {
-            res.status(200).json({
+            return res.json({
               accepted: true,
-              workloadId: workload.id,
+              workloadId: req.body.id,
               nodeId: result.nodeId,
               forwardedTo: result.nodeId
             });
-          } else {
-            res.status(400).json({
-              accepted: false,
-              reason: result.reason || decision.reason
-            });
           }
+        } catch (forwardError) {
+          logger.error('Error forwarding workload:', forwardError);
         }
-      } catch (err) {
-        logger.error('Error handling workload submission:', err);
+        
         res.status(500).json({
           accepted: false,
-          reason: 'Internal server error'
+          reason: err.message || 'Internal server error'
         });
       }
     });
     
-    // Start the API server
-    this.apiServer = app.listen(apiPort, '0.0.0.0', () => {
-      logger.info(`API server listening on port ${apiPort}`);
+    // Get workload status
+    app.get('/api/workloads/:id', (req, res) => {
+      const workloadId = req.params.id;
+      const workload = this.workloads.get(workloadId);
+      
+      if (!workload) {
+        return res.status(404).json({ error: 'Workload not found' });
+      }
+      
+      res.json({
+        id: workloadId,
+        status: workload.status,
+        providerId: workload.providerId,
+        consumerId: workload.consumerId,
+        createdAt: workload.createdAt
+      });
+    });
+    
+    // Get workload logs
+    app.get('/api/workloads/:id/logs', (req, res) => {
+      const workloadId = req.params.id;
+      const workload = this.workloads.get(workloadId);
+      
+      if (!workload) {
+        return res.status(404).json({ error: 'Workload not found' });
+      }
+      
+      res.send(`Sample logs for workload ${workloadId}\nThis is a simulated workload.\nStatus: ${workload.status}`);
+    });
+    
+    // Stop workload
+    app.delete('/api/workloads/:id', (req, res) => {
+      const workloadId = req.params.id;
+      const workload = this.workloads.get(workloadId);
+      
+      if (!workload) {
+        return res.status(404).json({ error: 'Workload not found' });
+      }
+      
+      // Update status to stopped
+      workload.status = 'stopped';
+      workload.stoppedAt = Date.now();
+      this.workloads.set(workloadId, workload);
+      
+      logger.info(`Workload ${workloadId} stopped`);
+      
+      res.json({ success: true, message: 'Workload stopped' });
+    });
+    
+    // METRICS ENDPOINTS
+    
+    // Get current metrics
+    app.get('/api/metrics', (req, res) => {
+      // Simple metrics response
+      res.json({
+        system: {
+          cpuUsage: Math.random() * 100,
+          memoryUsagePercent: Math.random() * 100
+        },
+        history: Array(24).fill(0).map((_, i) => ({
+          timestamp: Date.now() - i * 300000,
+          cpu: Math.random() * 100,
+          memory: Math.random() * 100,
+          network: {
+            rx: Math.random() * 10000000,
+            tx: Math.random() * 5000000
+          }
+        }))
+      });
+    });
+    
+    // Get historical metrics
+    app.get('/api/metrics/history', (req, res) => {
+      // Simple metrics history
+      res.json({
+        history: Array(24).fill(0).map((_, i) => ({
+          timestamp: Date.now() - i * 300000,
+          cpu: Math.random() * 100,
+          memory: Math.random() * 100,
+          network: {
+            rx: Math.random() * 10000000,
+            tx: Math.random() * 5000000
+          }
+        })),
+        interval: '5m'
+      });
+    });
+  }
+  
+  _setupSocketHandlers() {
+    this.io.on('connection', (socket) => {
+      logger.info(`Socket connected: ${socket.id}`);
+      
+      // Send initial data
+      socket.emit('status', {
+        id: this.nodeId,
+        uptime: process.uptime(),
+        nodeType: this.config.nodeType,
+        connections: this.knownPeers.size,
+        resources: this.resources
+      });
+      
+      // Handle real-time metrics subscription
+      socket.on('subscribe:metrics', () => {
+        // Create an interval to send metrics updates
+        const interval = setInterval(() => {
+          socket.emit('metrics:update', {
+            system: {
+              cpuUsage: Math.random() * 100,
+              memoryUsagePercent: Math.random() * 100
+            },
+            timestamp: Date.now()
+          });
+        }, 5000); // Every 5 seconds
+        
+        // Clean up on disconnect
+        socket.on('disconnect', () => {
+          clearInterval(interval);
+        });
+      });
+      
+      // Handle real-time workload updates subscription
+      socket.on('subscribe:workloads', () => {
+        // Create an interval to send workload updates
+        const interval = setInterval(() => {
+          const workloads = Array.from(this.workloads.entries()).map(([id, workload]) => ({
+            id,
+            status: workload.status,
+            providerId: workload.providerId,
+            consumerId: workload.consumerId,
+            createdAt: workload.createdAt
+          }));
+          
+          socket.emit('workloads:update', workloads);
+        }, 5000); // Every 5 seconds
+        
+        // Clean up on disconnect
+        socket.on('disconnect', () => {
+          clearInterval(interval);
+        });
+      });
+      
+      // Handle disconnection
+      socket.on('disconnect', () => {
+        logger.info(`Socket disconnected: ${socket.id}`);
+      });
     });
   }
   
@@ -436,22 +626,6 @@ class ICNNode {
     }, 60000); // every minute
   }
   
-  _canAcceptWorkload(workload) {
-    // Simple resource check - in a real implementation this would be much more sophisticated
-    const requiredCores = workload.requirements?.cpu?.cores || 1;
-    const availableCores = this.resources.cpu.cores - 
-      Array.from(this.workloads.values())
-        .reduce((total, wl) => total + (wl.requirements?.cpu?.cores || 1), 0);
-    
-    if (availableCores < requiredCores) {
-      return { canAccept: false, reason: 'Insufficient CPU resources' };
-    }
-    
-    // More sophisticated checks would go here
-    
-    return { canAccept: true, reason: 'Resources available' };
-  }
-  
   async _findNodeForWorkload(workload) {
     // Try to find another node that can accept the workload
     for (const [peerId, peer] of this.knownPeers.entries()) {
@@ -490,41 +664,42 @@ class ICNNode {
     };
   }
   
-  _generateId() {
-    return `wl-${Date.now()}-${Math.floor(Math.random() * 1000000)}`;
-  }
-  
   _setupShutdownHandlers() {
-    // Handle shutdown signals
+    const shutdownHandler = async () => {
+      logger.info('Shutting down ICN node...');
+      
+      // Clear intervals
+      if (this.discoveryInterval) {
+        clearInterval(this.discoveryInterval);
+      }
+      
+      if (this.resourceBroadcastInterval) {
+        clearInterval(this.resourceBroadcastInterval);
+      }
+      
+      // Close Socket.IO connections
+      if (this.io) {
+        this.io.close();
+      }
+      
+      // Close HTTP server
+      if (this.httpServer) {
+        await new Promise(resolve => this.httpServer.close(resolve));
+      }
+      
+      logger.info('ICN node shutdown complete');
+    };
+    
+    // Handle termination signals
     process.on('SIGINT', async () => {
-      await this.stop();
+      await shutdownHandler();
       process.exit(0);
     });
     
     process.on('SIGTERM', async () => {
-      await this.stop();
+      await shutdownHandler();
       process.exit(0);
     });
-  }
-  
-  async stop() {
-    logger.info('Shutting down node...');
-    
-    // Clear intervals
-    if (this.discoveryInterval) {
-      clearInterval(this.discoveryInterval);
-    }
-    
-    if (this.resourceBroadcastInterval) {
-      clearInterval(this.resourceBroadcastInterval);
-    }
-    
-    // Close the API server
-    if (this.apiServer) {
-      await new Promise(resolve => this.apiServer.close(resolve));
-    }
-    
-    logger.info('Node shutdown complete');
   }
 }
 
@@ -533,7 +708,7 @@ async function main() {
   try {
     const node = new ICNNode();
     await node.init();
-    logger.info('ICN node initialized successfully');
+    logger.info('ICN node running successfully');
   } catch (err) {
     logger.error('Failed to start ICN node:', err);
     process.exit(1);

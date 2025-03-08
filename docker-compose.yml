@@ -21,6 +21,7 @@ services:
     volumes:
       - bootstrap-data:/app/data
       - bootstrap-logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
 
   # Regular node 1
@@ -32,7 +33,6 @@ services:
     environment:
       - NODE_TYPE=regular
       - NODE_PORT=9001
-      # We'll use the container name networking in Docker Compose
       - BOOTSTRAP_NODES=["http://bootstrap:3000"]
       - COOPERATIVE_ID=icn-prototype
       - COOPERATIVE_TIER=contributor
@@ -43,6 +43,7 @@ services:
     volumes:
       - node1-data:/app/data
       - node1-logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
 
   # Regular node 2
@@ -54,7 +55,6 @@ services:
     environment:
       - NODE_TYPE=regular
       - NODE_PORT=9002
-      # We'll use the container name networking in Docker Compose
       - BOOTSTRAP_NODES=["http://bootstrap:3000"]
       - COOPERATIVE_ID=icn-prototype
       - COOPERATIVE_TIER=contributor
@@ -65,9 +65,10 @@ services:
     volumes:
       - node2-data:/app/data
       - node2-logs:/app/logs
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
 
-  # Simple web dashboard
+  # Web dashboard
   dashboard:
     image: nginx:alpine
     container_name: icn-dashboard

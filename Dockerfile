@@ -1,10 +1,12 @@
 FROM node:18-slim
 
-# Install system dependencies
+# Install system dependencies including Python and build tools
 RUN apt-get update && apt-get install -y \
     curl \
     wget \
     git \
+    python3 \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # Create app directory
@@ -19,6 +21,7 @@ RUN npm install
 
 # Copy application code
 COPY index.js ./
+COPY lib/ ./lib/
 
 # Expose ports for P2P networking and API
 EXPOSE 9000-9010

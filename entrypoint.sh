@@ -61,11 +61,20 @@ print_node_info() {
   echo "====================================="
 }
 
+# Create necessary directories
+create_directories() {
+  mkdir -p /app/config
+  mkdir -p /app/data/keys
+  mkdir -p /app/data/storage
+  mkdir -p /app/data/metadata
+  mkdir -p /app/data/credits
+  mkdir -p /app/data/governance
+  mkdir -p /app/logs
+}
+
 # Main function
 main() {
-  # Create required directories
-  mkdir -p /app/config /app/data/keys /app/logs
-  
+  create_directories
   generate_config
   print_node_info
   
